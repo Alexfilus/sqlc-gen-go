@@ -44,6 +44,28 @@ func (q *Queries) {{.MethodName}}(ctx context.Context, {{.Arg.Pair}}) ({{.Ret.De
 {{if eq .Cmd ":many"}}
 {{range .Comments}}//{{.}}
 {{end -}}
+{{- if $.EmitResultSlicePointer -}}
+{{- if $.EmitMethodsWithDBArgument -}}
+func (q *Queries) {{.MethodName}}(ctx context.Context, db DBTX, {{if .Arg.Pair}}{{.Arg.Pair}}, {{end}}dest *[]{{.Ret.DefineType}}) error {
+	rows, err := db.Query(ctx, {{.ConstantName}}{{if .Arg.Params}}, {{.Arg.Params}}{{end}})
+{{- else -}}
+func (q *Queries) {{.MethodName}}(ctx context.Context, {{if .Arg.Pair}}{{.Arg.Pair}}, {{end}}dest *[]{{.Ret.DefineType}}) error {
+	rows, err := q.db.Query(ctx, {{.ConstantName}}{{if .Arg.Params}}, {{.Arg.Params}}{{end}})
+{{- end}}
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var {{.Ret.Name}} {{.Ret.Type}}
+		if err := rows.Scan({{.Ret.Scan}}); err != nil {
+			return err
+		}
+		*dest = append(*dest, {{.Ret.ReturnName}})
+	}
+	return rows.Err()
+}
+{{- else -}}
 {{- if $.EmitMethodsWithDBArgument -}}
 func (q *Queries) {{.MethodName}}(ctx context.Context, db DBTX, {{.Arg.Pair}}) ([]{{.Ret.DefineType}}, error) {
 	rows, err := db.Query(ctx, {{.ConstantName}}, {{.Arg.Params}})
@@ -72,6 +94,7 @@ func (q *Queries) {{.MethodName}}(ctx context.Context, {{.Arg.Pair}}) ([]{{.Ret.
 	}
 	return items, nil
 }
+{{- end}}
 {{end}}
 
 {{if eq .Cmd ":exec"}}
